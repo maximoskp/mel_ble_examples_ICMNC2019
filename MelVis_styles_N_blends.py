@@ -18,14 +18,14 @@ import MBL_music_processing_functions as mpf
 import pickle
 import matplotlib.pyplot as plt
 
-remakedata = False
+remakedata = True
 test_plot = True
 
 if remakedata:
-    mainFolder = cwd + '/all_xmls/'
-    styles_folders = ['han/', 'jazz/']
+    mainFolder = cwd + os.sep + 'all_xmls' + os.sep
+    styles_folders = ['han' + os.sep, 'jazz' + os.sep]
     session_names = ['han', 'jazz']
-    blending_sessions = [['han0269.xml','benny_and_the_jets.xml'] , ['han0284','blues_in_the_night'] , ['han0163','jersy_bounce'] , ['han0108','please_dont_talk_about_me']]
+    blending_sessions = [['han0269','benny_and_the_jets'] , ['han0284','blues_in_the_night'] , ['han0163','jersy_bounce'] , ['han0108','please_dont_talk_about_me']]
     
     all_names = []
     all_features = []
@@ -33,6 +33,7 @@ if remakedata:
     blend_names = []
     for j in range(14):
         blend_names.append( 'blend_' + str(j) + '.xml' )
+    blending_indexes = []
     
     # first construct the features matrix of all pieces in both styles
     for i in range( len( styles_folders ) ):
@@ -42,8 +43,8 @@ if remakedata:
         # for all pieces extract features and put them in respective np.arrays
         for j in range( len( all_files ) ):
             fileName = all_files[j]
-            all_names.append( fileName.split('/')[-1] )
-            print('Processing: ', fileName)
+            all_names.append( fileName.split(os.sep)[-1] )
+            print('Processing initial: ', fileName)
             p = m21.converter.parse( fileName )
             tmp_val = mff.get_features_of_stream( p )
             tmp_feats.append( tmp_val )
@@ -51,26 +52,42 @@ if remakedata:
     # end for styles
     # for each blending sessions, append features
     for i in range( len( blending_sessions ) ):
-        
-    for i in range( len( blending_sessions ) ):
-        # get blending session folder name
-        session_folder = 'bl_'+blending_sessions[i][1]+'_'+blending_sessions[i][0]+'/'
-        # keep indexes of the pieces to be highlighted
-        han2show = blending_sessions[i][0]
-        jazz2show = blending_sessions[i][1]
-        # get indexes to highlight
-        han_idx = all_names.index( han2show )
-        jazz_idx = all_names.index( jazz2show )
+        session_folder = 'bl'+str(i+1)+'_'+blending_sessions[i][1]+'_'+blending_sessions[i][0]+os.sep
+        blending_indexes.append( range( len(all_features), len(all_features)+len(blend_names), 1 ) )
+        for j in range( len( blend_names ) ):
+            print('Processing blend: ', blend_names[j])
+            fileName = cwd+os.sep+'full'+os.sep+session_folder+ blend_names[j]
+            p = m21.converter.parse( fileName )
+            tmp_val = mff.get_features_of_stream( p )
+            tmp_feats.append( tmp_val )
+            all_features.append( tmp_val )
+    # do PCA to all features
     # PCA
     pca = PCA(n_components=2)
     all_features_np = np.vstack( all_features )
     all_pca = pca.fit_transform( np.vstack( all_features_np ) )
-    # plt.plot(all_pca[:447,0], all_pca[:447,1], 'x', color='grey')
-    # plt.plot(all_pca[447:,0], all_pca[447:,1], 'o', color='grey')
-    for i in range( len( han_highlight ) ):
-        plt.plot(all_pca[han_highlight[i],0], all_pca[han_highlight[i],1], 'x', color='black')
-        plt.plot(all_pca[jazz_highlight[i],0], all_pca[jazz_highlight[i],1], 'o', color='black')
-    plt.savefig('figs/pca_all.png', dpi=500); plt.clf()
+    # keep the pca coordinates of the original (not blended) pieces
+    all_original_pca = all_pca[ :len(all_names) , : ]
+    for i in range( len( blending_sessions ) ):
+        # keep indexes of the pieces to be highlighted
+        han2show = blending_sessions[i][0]
+        jazz2show = blending_sessions[i][1]
+        # get indexes to highlight
+        han_idx = all_names.index( han2show+'.xml' )
+        jazz_idx = all_names.index( jazz2show+'.xml' )
+        # get pca of blends on features matrix
+        blends_pca = all_pca[ blending_indexes[i] , : ]
+        # plot pca of original pieces
+        plt.plot(all_original_pca[:488,0], all_original_pca[:488,1], '|', color='blue', alpha=0.5)
+        plt.plot(all_original_pca[488:,0], all_original_pca[488:,1], '_', color='green', alpha=0.5)
+        # highlight inputs
+        plt.plot(all_original_pca[han_idx,0], all_original_pca[han_idx,1], 'd', color='blue')
+        plt.plot(all_original_pca[jazz_idx,0], all_original_pca[jazz_idx,1], 's', color='green')
+        # plot blends
+        for j in range(14):
+            plt.plot(blends_pca[j,0], blends_pca[j,1], 'o', color='black')
+            plt.text(blends_pca[j,0], blends_pca[j,1], str(j), color='red', fontsize=7)
+        plt.savefig('figs/pca_'+blending_sessions[i][1]+'_'+blending_sessions[i][0]+'.png', dpi=500); plt.clf()
     # save
     with open('saved_data/all_features.pickle', 'wb') as handle:
         pickle.dump(all_features, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -78,14 +95,6 @@ if remakedata:
         pickle.dump(all_pca, handle, protocol=pickle.HIGHEST_PROTOCOL)
     with open('saved_data/all_names.pickle', 'wb') as handle:
         pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('saved_data/han2show.pickle', 'wb') as handle:
-        pickle.dump(han2show, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('saved_data/jazz2show.pickle', 'wb') as handle:
-        pickle.dump(jazz2show, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('saved_data/han_highlight.pickle', 'wb') as handle:
-        pickle.dump(han_highlight, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('saved_data/jazz_highlight.pickle', 'wb') as handle:
-        pickle.dump(jazz_highlight, handle, protocol=pickle.HIGHEST_PROTOCOL)
 else:
     with open('saved_data/all_features.pickle', 'rb') as handle:
         all_features = pickle.load(handle)
@@ -93,14 +102,6 @@ else:
         all_pca = pickle.load(handle)
     with open('saved_data/all_names.pickle', 'rb') as handle:
         all_names = pickle.load(handle)
-    with open('saved_data/han2show.pickle', 'rb') as handle:
-        han2show = pickle.load(handle)
-    with open('saved_data/jazz2show.pickle', 'rb') as handle:
-        jazz2show = pickle.load(handle)
-    with open('saved_data/han_highlight.pickle', 'rb') as handle:
-        han_highlight = pickle.load(handle)
-    with open('saved_data/jazz_highlight.pickle', 'rb') as handle:
-        jazz_highlight = pickle.load(handle)
     # PCA
     pca = PCA(n_components=2)
     all_features_np = np.vstack( all_features )
