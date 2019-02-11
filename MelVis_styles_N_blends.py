@@ -25,7 +25,7 @@ if remakedata:
     mainFolder = cwd + os.sep + 'all_xmls' + os.sep
     styles_folders = ['han' + os.sep, 'jazz' + os.sep]
     session_names = ['han', 'jazz']
-    blending_sessions = [['han0269','benny_and_the_jets'] , ['han0284','blues_in_the_night'] , ['han0163','jersy_bounce'] , ['han0108','please_dont_talk_about_me']]
+    blending_sessions = [['han0120','fried_bananas'] , ['han0351','i_fall_in_love_too_easy'] , ['han0238','i_hear_rapsody'] , ['han0207','my_silient_love']]
     
     all_names = []
     all_features = []
@@ -37,6 +37,7 @@ if remakedata:
     
     # first construct the features matrix of all pieces in both styles
     for i in range( len( styles_folders ) ):
+        print('Processing initial: ', styles_folders[i])
         folderName = mainFolder + styles_folders[i]
         all_files = glob.glob(folderName + "*.xml")
         tmp_feats = []
@@ -44,7 +45,7 @@ if remakedata:
         for j in range( len( all_files ) ):
             fileName = all_files[j]
             all_names.append( fileName.split(os.sep)[-1] )
-            print('Processing initial: ', fileName)
+            # print('Processing initial: ', fileName)
             p = m21.converter.parse( fileName )
             tmp_val = mff.get_features_of_stream( p )
             tmp_feats.append( tmp_val )
@@ -54,8 +55,9 @@ if remakedata:
     for i in range( len( blending_sessions ) ):
         session_folder = 'bl'+str(i+1)+'_'+blending_sessions[i][1]+'_'+blending_sessions[i][0]+os.sep
         blending_indexes.append( range( len(all_features), len(all_features)+len(blend_names), 1 ) )
+        print('Processing blend: ', session_folder)
         for j in range( len( blend_names ) ):
-            print('Processing blend: ', blend_names[j])
+            # print('Processing blend: ', blend_names[j])
             fileName = cwd+os.sep+'full'+os.sep+session_folder+ blend_names[j]
             p = m21.converter.parse( fileName )
             tmp_val = mff.get_features_of_stream( p )
@@ -65,7 +67,21 @@ if remakedata:
     # PCA
     pca = PCA(n_components=2)
     all_features_np = np.vstack( all_features )
-    all_pca = pca.fit_transform( np.vstack( all_features_np ) )
+    # normalise
+    x = all_features_np
+    x_max = np.max(x, axis=0)
+    x_min = np.min(x, axis=0)
+    y = (x-x_min)/(x_max-x_min);
+    # all_pca = pca.fit_transform( np.vstack( all_features_np ) )
+    all_pca = pca.fit_transform( np.vstack( y ) )
+    tmp_pca = pca.fit(np.vstack( y ))
+    explained = tmp_pca.explained_variance_ratio_
+    print('PCA explained variances: ', explained)
+    print('PCA axes correlations:')
+    for i in range(2):
+        for j in range(4):
+            print('PCA_', i, ' - f_', j, ': ', np.corrcoef( all_pca[:,i], all_features_np[:,j] )[0][1])
+    print('PCA_0 - f_0+f_2: ', np.corrcoef( all_pca[:,0], all_features_np[:,0]+all_features_np[:,2] )[0][1])
     # keep the pca coordinates of the original (not blended) pieces
     all_original_pca = all_pca[ :len(all_names) , : ]
     for i in range( len( blending_sessions ) ):
@@ -78,15 +94,21 @@ if remakedata:
         # get pca of blends on features matrix
         blends_pca = all_pca[ blending_indexes[i] , : ]
         # plot pca of original pieces
-        plt.plot(all_original_pca[:488,0], all_original_pca[:488,1], '|', color='blue', alpha=0.5)
-        plt.plot(all_original_pca[488:,0], all_original_pca[488:,1], '_', color='green', alpha=0.5)
+        plt.plot(all_original_pca[:488,0], all_original_pca[:488,1], '|', color='grey', alpha=0.5, label='Han')
+        plt.plot(all_original_pca[488:,0], all_original_pca[488:,1], '_', color='grey', alpha=0.5, label='Jazz')
         # highlight inputs
-        plt.plot(all_original_pca[han_idx,0], all_original_pca[han_idx,1], 'd', color='blue')
-        plt.plot(all_original_pca[jazz_idx,0], all_original_pca[jazz_idx,1], 's', color='green')
+        plt.plot(all_original_pca[han_idx,0], all_original_pca[han_idx,1], 'd', color='grey', markerSize=10, label='Han input')
+        plt.plot(all_original_pca[jazz_idx,0], all_original_pca[jazz_idx,1], 's', color='grey', markerSize=10, label='Jazz input')
         # plot blends
         for j in range(14):
-            plt.plot(blends_pca[j,0], blends_pca[j,1], 'o', color='black')
-            plt.text(blends_pca[j,0], blends_pca[j,1], str(j), color='red', fontsize=7)
+            if j==0:
+                plt.plot(blends_pca[j,0], blends_pca[j,1], '.', color='black', label='blend')
+            else:
+                plt.plot(blends_pca[j,0], blends_pca[j,1], '.', color='black')
+            plt.text(blends_pca[j,0], blends_pca[j,1], str(j), color='black', fontsize=9, bbox=dict(facecolor='white', alpha=0.2))
+        plt.xticks([])
+        plt.yticks([])
+        plt.legend()
         plt.savefig('figs/pca_'+blending_sessions[i][1]+'_'+blending_sessions[i][0]+'.png', dpi=500); plt.clf()
     # save
     with open('saved_data/all_features.pickle', 'wb') as handle:
